@@ -5,11 +5,15 @@ import requests
 # Initialize FastAPI
 app = FastAPI()
 
-# WordPress credentials and base URL
-WORDPRESS_BASE_URL = "https://praudyogic.com"
-WORDPRESS_USERNAME = "anmol1270"
-WORDPRESS_PASSWORD = "bikm 2BZi 0CCc yK0F 5cap N384"
+import json
 
+# Load credentials from a JSON config file
+with open("config.json") as config_file:
+    config = json.load(config_file)
+
+WORDPRESS_BASE_URL = config["WORDPRESS_BASE_URL"]
+WORDPRESS_USERNAME = config["WORDPRESS_USERNAME"]
+WORDPRESS_PASSWORD = config["WORDPRESS_PASSWORD"]
 # Pydantic model for request validation
 class BlogPost(BaseModel):
     title: str
