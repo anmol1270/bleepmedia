@@ -14,6 +14,9 @@ with open("config.json") as config_file:
 WORDPRESS_BASE_URL = config["WORDPRESS_BASE_URL"]
 WORDPRESS_USERNAME = config["WORDPRESS_USERNAME"]
 WORDPRESS_PASSWORD = config["WORDPRESS_PASSWORD"]
+
+
+print(WORDPRESS_BASE_URL,WORDPRESS_USERNAME,WORDPRESS_PASSWORD)
 # Pydantic model for request validation
 class BlogPost(BaseModel):
     title: str
@@ -28,16 +31,23 @@ class BlogPost(BaseModel):
 def get_or_create_taxonomy_id(base_url, taxonomy, name, auth):
     taxonomy_url = f"{base_url}/wp-json/wp/v2/{taxonomy}"
     response = requests.get(taxonomy_url, auth=auth)
-    items = response.json()
+    if response.status_code != 200:
+        raise HTTPException(status_code=400, detail="Failed to retrieve taxonomy terms.")
 
+    items = response.json()
     for item in items:
         if item["name"].lower() == name.lower():
             return item["id"]
 
     # Create the taxonomy if not found
     response = requests.post(taxonomy_url, json={"name": name}, auth=auth)
-    print(response)
-    return response.json()["id"]
+    if response.status_code == 201:
+        return response.json()["id"]
+    elif response.status_code == 400 and "term_exists" in response.json().get("code", ""):
+        return response.json()["data"]["term_id"]
+    else:
+        raise HTTPException(status_code=400, detail=f"Failed to create taxonomy: {response.json()}")
+
 
 # Helper function to upload featured image
 def upload_featured_image(base_url, image_url, auth):
