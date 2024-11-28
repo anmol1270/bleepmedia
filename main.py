@@ -1,39 +1,45 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import requests
+import os
+from dotenv import load_dotenv
 
-# Initialize FastAPI
+# Load environment variables
+load_dotenv()
+
+SLACK_TOKEN = "xoxb-8102575069952-8085946403206-x3NRM2FxC9pZoM2SFZKkZr5h"
+
 app = FastAPI()
 
-import json
+class ChannelDetails(BaseModel):
+    name: str
+    description: str
+    is_private: bool
 
-# Load credentials from a JSON config file
-MIRO_ACCESS_TOKEN = "eyJtaXJvLm9yaWdpbiI6ImV1MDEifQ_EbZCWDwBUKBH-JABUIAgPnGTPk4"
-MIRO_API_URL = "https://api.miro.com/v2"
+@app.post("/create_channel/")
+def create_channel(details: ChannelDetails):
+    headers = {"Authorization": f"Bearer {SLACK_TOKEN}"}
+    url = "https://slack.com/api/conversations.create"
 
-class CreateBoardRequest(BaseModel):
-    board_name: str
-    permissions: str
-    description: str = None
-    team_id: str
-
-@app.post("/create_board")
-def create_board(request: CreateBoardRequest):
-    headers = {
-        "Authorization": f"Bearer {MIRO_ACCESS_TOKEN}",
-        "Content-Type": "application/json"
-    }
     payload = {
-        "name": request.board_name,
-        "sharingPolicy": {"access": request.permissions},
-        "description": request.description
+        "name": details.name,
+        "is_private": details.is_private
     }
-    if request.team_id:
-        payload["team_id"] = request.team_id
 
-    response = requests.post(f"{MIRO_API_URL}/boards", headers=headers, json=payload)
+    # Create the channel
+    response = requests.post(url, headers=headers, json=payload)
+    data = response.json()
 
-    if response.status_code == 201:
-        return response.json()
-    else:
-        raise HTTPException(status_code=response.status_code, detail=response.json())
+    if not data.get("ok"):
+        raise HTTPException(status_code=400, detail=data.get("error"))
+
+    # Set the channel topic/description
+    topic_url = "https://slack.com/api/conversations.setTopic"
+    topic_payload = {
+        "channel": data["channel"]["id"],
+        "topic": details.description
+    }
+
+    requests.post(topic_url, headers=headers, json=topic_payload)
+
+    return {"channel_id": data["channel"]["id"], "channel_name": details.name}
