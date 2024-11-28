@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-SLACK = "xoxb-8102575069952-8085946403206-x3NRM2FxC9pZoM2SFZKkZr5h"
+SLACK = "xoxb-8102575069952-8085946403206-YQh6xsJGiSEukTIlZZCoGsej"
 
 app = FastAPI()
 
