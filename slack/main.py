@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-SLACK_TOKEN = "xoxb-8102575069952-8085946403206-x3NRM2FxC9pZoM2SFZKkZr5h"
+SLACK = "xoxb-8102575069952-8085946403206-x3NRM2FxC9pZoM2SFZKkZr5h"
 
 app = FastAPI()
 
@@ -18,7 +18,7 @@ class ChannelDetails(BaseModel):
 
 @app.post("/create_channel/")
 def create_channel(details: ChannelDetails):
-    headers = {"Authorization": f"Bearer {SLACK_TOKEN}"}
+    headers = {"Authorization": f"Bearer {SLACK}"}
     url = "https://slack.com/api/conversations.create"
 
     payload = {
