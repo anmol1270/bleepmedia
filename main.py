@@ -1,58 +1,42 @@
+# main.py
 from fastapi import FastAPI, HTTPException
-from gmail_functions import *
 from pydantic import BaseModel
-
+from gpt_handler import parse_prompt
+from miro import create_nodes_and_connections, ensure_board_exists
 
 app = FastAPI()
 
-@app.get("/")
-def home():
-    return {"message": "Welcome to Gmail Search GPT Backend"}
+class DiagramRequest(BaseModel):
+    prompt: str
+    board_name: str
 
-@app.get("/search/")
-def search_emails(query: str, max_results: int = 5):
+import json  # Import the JSON module
+
+@app.post("/generate-diagram/")
+async def generate_diagram(request: DiagramRequest):
+    """
+    API endpoint to generate a diagram in Miro on the specified board.
+    If the board does not exist, create it.
+    """
     try:
-        # Search Gmail
-        emails = search_gmail(query, max_results)
-        if not emails:
-            return {"message": "No emails found."}
-        
-        return {"emails": emails}
+        # Step 1: Ensure the board exists
+        board_id = ensure_board_exists(request.board_name)
+        print("board exists!!!!",board_id)
 
+        # Step 2: Parse the user's prompt with GPT
+        gpt_response = parse_prompt(request.prompt)
+        print(gpt_response)
+        print('gpt response got!!!!!')
+        # Step 3: Safely parse the GPT response as JSON
+        try:
+            diagram_data = json.loads(gpt_response)
+            
+              # Use json.loads() instead of eval()
+        except json.JSONDecodeError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid JSON response from GPT: {e}")
+
+        # Step 4: Generate the diagram on the board
+        create_nodes_and_connections(diagram_data,board_id)
+        return {"message": f"Diagram created successfully on board '{request.board_name}'!", "board_id": board_id}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-class ReplyEmailRequest(BaseModel):
-    email_id: str
-    message_body: str
-
-@app.post("/reply/")
-def reply_to_email(reply_request: ReplyEmailRequest):
-    """Reply to a specific email."""
-    try:
-        service = authenticate_gmail()
-        
-        # Fetch the original email details
-        email = service.users().messages().get(userId='me', id=reply_request.email_id, format='metadata').execute()
-        headers = {header['name']: header['value'] for header in email['payload']['headers']}
-        
-        # Extract necessary fields
-        to_email = headers.get('From')  # Reply to the sender
-        subject = headers.get('Subject', "No Subject")
-        thread_id = email.get('threadId')
-
-        # Create reply message
-        reply_message = create_reply_email(
-            to_email=to_email,
-            subject=subject,
-            message_body=reply_request.message_body,
-            thread_id=thread_id
-        )
-        
-        # Send the email
-        response = send_email_reply(service, reply_message)
-        return {"message": "Reply sent successfully", "response": response}
-    
-    except Exception as e:
-        print(f"Error replying to email: {e}")
-        raise HTTPException(status_code=500, detail="Failed to send email reply")
