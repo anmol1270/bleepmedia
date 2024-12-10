@@ -1,49 +1,34 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
+from twilio.rest import Client
+from dotenv import load_dotenv
 import os
 
-# FastAPI app initialization
+load_dotenv(dotenv_path='cred.env')
+
 app = FastAPI()
 
-# Service Account and Scopes
-SERVICE_ACCOUNT_FILE = "second-petal-444206-n7-e2e9cd9f57b5.json"  # Replace with your file
-SCOPES = ["https://www.googleapis.com/auth/admin.directory.group"]
-DELEGATED_ADMIN = "founder@praudyogic.com"  # Replace with your super admin email
+# Load Twilio credentials from environment variables
+account_sid = os.getenv('TWILIO_ACCOUNT_SID')
+auth_token = os.getenv('TWILIO_AUTH_TOKEN')
+client = Client(account_sid, auth_token)
 
-# Define Pydantic model for input validation
-class GroupDetails(BaseModel):
-    name: str
-    email: str
-    description: str
+class PhoneNumberRequest(BaseModel):
+    country: str
+    area_code: str = None
 
-# Function to authenticate and build the Admin SDK service
-def get_admin_service():
-    credentials = service_account.Credentials.from_service_account_file(
-        SERVICE_ACCOUNT_FILE, scopes=SCOPES
-    ).with_subject(DELEGATED_ADMIN)
-
-    service = build("admin", "directory_v1", credentials=credentials)
-    return service
-
-@app.post("/create-group")
-async def create_group(group: GroupDetails):
-    """
-    Endpoint to create a Google Group.
-    """
+@app.post("/buy-number/")
+async def buy_number(request: PhoneNumberRequest):
     try:
-        service = get_admin_service()
-        group_body = {
-            "name": group.name,
-            "email": group.email,
-            "description": group.description,
-        }
-        result = service.groups().insert(body=group_body).execute()
-        return {"message": "Group created successfully", "group": result}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create group: {str(e)}")
+        # Search for available phone numbers
+        numbers = client.available_phone_numbers(request.country).local.list(
+            area_code=request.area_code, sms_enabled=True, limit=1
+        )
+        if not numbers:
+            raise HTTPException(status_code=404, detail="No available phone numbers found.")
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+        # Purchase the first available number
+        purchased_number = client.incoming_phone_numbers.create(phone_number=numbers[0].phone_number)
+        return {"purchased_number": purchased_number.phone_number}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
